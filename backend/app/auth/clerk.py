@@ -200,10 +200,30 @@ def _get_signing_key_from_jwks(jwks: Dict[str, Any], token: str) -> Any:
 # FastAPI dependency
 # ---------------------------------------------------------------------------
 
+_DEV_USER: Dict[str, Any] = {
+    "user_id": "dev_user_local",
+    "email": "dev@localhost",
+    "role": "admin",
+    "org_id": "org_dev",
+    "metadata": {},
+    "payload": {},
+}
+
+def _is_clerk_configured() -> bool:
+    """Return True only when a real Clerk secret key is present."""
+    key = settings.CLERK_SECRET_KEY or ""
+    return (
+        key.startswith("sk_test_") or key.startswith("sk_live_")
+    ) and "your" not in key.lower()
+
+
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
 ) -> Dict[str, Any]:
     """FastAPI dependency that resolves the authenticated user from a Bearer token.
+
+    In development (Clerk not configured), returns a mock dev user so every
+    endpoint remains accessible without a real JWT.
 
     Usage::
 
@@ -214,8 +234,13 @@ async def get_current_user(
     Raises
     ------
     HTTPException(401)
-        If no token is provided or it fails verification.
+        If no token is provided or it fails verification (production only).
     """
+    # Dev-mode bypass: Clerk keys not set → return mock dev user
+    if not _is_clerk_configured():
+        logger.debug("Clerk not configured — using dev user bypass")
+        return _DEV_USER
+
     if credentials is None or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
