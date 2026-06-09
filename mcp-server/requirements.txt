@@ -1,0 +1,9 @@
+mcp>=1.0.0
+fastapi
+uvicorn[standard]
+httpx
+python-dotenv
+pydantic
+redis
+loguru
+asyncio

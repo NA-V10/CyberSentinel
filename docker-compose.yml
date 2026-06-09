@@ -1,0 +1,244 @@
+# ---------------------------------------------------------------------------
+# Named volumes for persistent data
+# ---------------------------------------------------------------------------
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  qdrant_storage:
+    driver: local
+  neo4j_data:
+    driver: local
+  neo4j_logs:
+    driver: local
+  neo4j_plugins:
+    driver: local
+  backend_models:
+    driver: local
+  backend_logs:
+    driver: local
+
+# ---------------------------------------------------------------------------
+# Custom bridge network — all services communicate by service name
+# ---------------------------------------------------------------------------
+networks:
+  cybersentinel_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL 16
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: cybersentinel_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cybersentinel
+      POSTGRES_USER: ${POSTGRES_USER:-cybersentinel}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cybersentinel_secret_2024}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cybersentinel_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cybersentinel} -d cybersentinel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Redis 7 — persistent append-only log
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: cybersentinel_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --appendfsync everysec --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cybersentinel_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # --------------------------------------------------------------------------
+  # Qdrant vector database
+  # --------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: cybersentinel_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST / gRPC-web
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - cybersentinel_net
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/readyz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # --------------------------------------------------------------------------
+  # Neo4j 5 Community
+  # --------------------------------------------------------------------------
+  neo4j:
+    image: neo4j:5-community
+    container_name: cybersentinel_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # HTTP browser / REST
+      - "7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/cybersentinel123}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 1G
+      NEO4J_dbms_memory_pagecache_size: 512m
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_security_procedures_allowlist: apoc.*
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+    networks:
+      - cybersentinel_net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # --------------------------------------------------------------------------
+  # Backend (FastAPI + LangGraph agents)
+  # --------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cybersentinel_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Override DB/Redis/Qdrant/Neo4j to use Docker service names
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cybersentinel}:${POSTGRES_PASSWORD:-cybersentinel_secret_2024}@postgres:5432/cybersentinel
+      REDIS_URL: redis://redis:6379/0
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+    volumes:
+      - ./data:/app/data
+      - backend_models:/app/models
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    networks:
+      - cybersentinel_net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # --------------------------------------------------------------------------
+  # MCP server (tool-calling HTTP gateway)
+  # --------------------------------------------------------------------------
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: cybersentinel_mcp
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cybersentinel_net
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # --------------------------------------------------------------------------
+  # Frontend (Next.js)
+  # --------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cybersentinel_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cybersentinel_net
+
+  # --------------------------------------------------------------------------
+  # Nginx reverse proxy (optional — comment out if running locally without it)
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: cybersentinel_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - cybersentinel_net
