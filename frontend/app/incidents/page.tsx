@@ -478,7 +478,7 @@ export default function IncidentsPage() {
                   <h3 className="text-sm font-semibold text-foreground px-1">
                     Mitigation Plan
                   </h3>
-                  {result.mitigation_phases.map(
+                  {result.mitigation_phases.filter((p: MitigationPhase) => p.steps.length > 0).map(
                     (phase: MitigationPhase, i: number) => (
                       <AccordionItem
                         key={phase.phase || i}
