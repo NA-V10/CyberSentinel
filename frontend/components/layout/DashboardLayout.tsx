@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { redirect } from "next/navigation";
+import { redirect, usePathname } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar, MobileSidebar } from "./Sidebar";
 import { setTokenGetter } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -13,11 +14,28 @@ const isClerkConfigured =
   !clerkKey.includes("your_publishable_key") &&
   !clerkKey.includes("your-clerk");
 
-// ── Shell ────────────────────────────────────────────────────────────────────
-// Pure layout: sidebar + main content area. No Clerk dependency.
+/* ── Page transition wrapper ─────────────────────────────────────────────── */
+function PageTransition({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={pathname}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
+/* ── Shell ───────────────────────────────────────────────────────────────── */
 function Shell({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar
@@ -27,24 +45,24 @@ function Shell({ children }: { children: React.ReactNode }) {
       <MobileSidebar />
       <main
         className={cn(
-          "transition-all duration-200 min-h-screen",
-          isCollapsed ? "md:pl-16" : "md:pl-60"
+          "transition-[padding] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] min-h-screen",
+          isCollapsed ? "md:pl-[60px]" : "md:pl-[236px]"
         )}
       >
-        <div className="p-4 md:p-6 lg:p-8">{children}</div>
+        {/* Subtle top border line */}
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        <div className="p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
+          <PageTransition>{children}</PageTransition>
+        </div>
       </main>
     </div>
   );
 }
 
-// ── ClerkGuardedLayout ───────────────────────────────────────────────────────
-// Only rendered when ClerkProvider is guaranteed to be in the tree.
-// useAuth() is called unconditionally at the top level — rules-of-hooks OK.
-
+/* ── ClerkGuardedLayout ──────────────────────────────────────────────────── */
 function ClerkGuardedLayout({ children }: { children: React.ReactNode }) {
   const { isLoaded, userId, getToken } = useAuth();
 
-  // Inject Clerk JWT into every axios request once session is ready
   useEffect(() => {
     if (isLoaded && userId) {
       setTokenGetter(() => getToken());
@@ -58,15 +76,12 @@ function ClerkGuardedLayout({ children }: { children: React.ReactNode }) {
   return <Shell>{children}</Shell>;
 }
 
-// ── DevLayout ────────────────────────────────────────────────────────────────
-// Used when Clerk keys are not configured (local dev / demo mode).
-
+/* ── DevLayout ───────────────────────────────────────────────────────────── */
 function DevLayout({ children }: { children: React.ReactNode }) {
   return <Shell>{children}</Shell>;
 }
 
-// ── DashboardLayout (export) ─────────────────────────────────────────────────
-
+/* ── Export ──────────────────────────────────────────────────────────────── */
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (isClerkConfigured) {
     return <ClerkGuardedLayout>{children}</ClerkGuardedLayout>;
