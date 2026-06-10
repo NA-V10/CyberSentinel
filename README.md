@@ -58,6 +58,63 @@ CyberSentinel AI is a production-grade, multi-tenant SaaS platform that applies 
 
 ---
 
+## Final Premium Feature Set
+
+Six enterprise-grade capabilities added on top of the full v2 platform. Each feature has a dedicated backend service, FastAPI router, LangGraph agent node, frontend page or war-room tab, WebSocket events, multi-tenant isolation, audit logs, and mock fallbacks for keyless operation.
+
+| # | Feature | Route(s) | Key Capability |
+|---|---------|---------|----------------|
+| 21 | **Agent Self-Reflection Engine** | `POST /reflection/analyze` · War Room tab | Post-judge self-critique loop: detects weaknesses, triggers re-analysis when judge score < 7.5, produces before/after comparison and final confidence score |
+| 22 | **Attack Campaign Detection** | `POST /campaigns/detect` · `GET /campaigns` · `/campaigns/[id]` | O(n²) pairwise incident clustering by IP /24 subnet (0.25), attack type (0.25), MITRE (0.25), protocol (0.10), severity (0.15) — groups related incidents into named campaigns with confidence score and threat actor profile |
+| 23 | **Autonomous Investigation Mode** | `POST /investigation/autonomous` · War Room tab | 8-step MCP tool pipeline: MITRE → IP reputation → graph → similar incidents → risk → mitigation → guardrails → report — returns full evidence chain, tool call timeline, and judge-scored summary |
+| 24 | **Multi-LLM Consensus Engine** | `POST /consensus/analyze` · War Room tab | Parallel GPT (0.45) + Claude (0.35) + Llama (0.20) analysis; automatic weight redistribution when models unavailable; weighted voting for classification and severity; agreement score + disagreement summary |
+| 25 | **AI SOC Digital Twin Simulator** | `GET /digital-twin/scenarios` · `POST /digital-twin/run/{id}` · `/digital-twin` | 6 built-in attack scenarios (phishing, malware, DDoS, insider, brute force, exfiltration); synthetic incident generation from templates; agent response simulation with 85–95% accuracy scoring |
+| 26 | **Cost Intelligence Platform** | `GET /cost/summary|by-agent|by-model|by-user|by-workflow|savings` · `/cost-intelligence` | Per-call token and cost tracking across all agents and models; Redis cache savings calculation; memory reuse savings; 5 built-in optimisation suggestions; BarChart, PieChart, and LineChart visualisations |
+
+### New Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `self_reflections` | Per-incident reflection records: judge score, weaknesses, improved analysis, before/after comparison |
+| `campaigns` | Detected attack campaigns with confidence score, narrative, threat actor profile, MITRE techniques |
+| `campaign_incidents` | Many-to-many join between campaigns and constituent incidents |
+| `autonomous_investigations` | Investigation runs: tool call sequence, evidence chain, timeline, findings, final summary |
+| `investigation_tool_calls` | Individual MCP tool invocations within an investigation |
+| `consensus_results` | Multi-LLM consensus outputs: model weights used, agreement score, disagreement summary |
+| `consensus_model_outputs` | Per-model analysis from each LLM (classification, severity, confidence, key findings) |
+| `digital_twin_scenarios` | Scenario definitions (overrides built-in catalogue for custom scenarios) |
+| `digital_twin_runs` | Simulation run results: accuracy score, response quality, agent response records |
+| `cost_usage_logs` | Per-call token and cost records: model, agent, workflow, user, prompt/completion tokens, estimated cost, cache savings |
+
+### New Frontend Routes
+
+| Route | Description |
+|-------|-------------|
+| `/war-room/[id]` (Self-Reflection tab) | Shows reflection trigger decision, weakness list, missing evidence, before/after comparison, final confidence |
+| `/war-room/[id]` (Auto Investigation tab) | MCP tool call timeline with sequence numbers, evidence chain, findings panel, final summary |
+| `/war-room/[id]` (Consensus Engine tab) | Per-model output table, agreement score cards, disagreement panel, weighted recommendation |
+| `/campaigns` | Campaign list with stats cards, search, confidence badges, "Detect Campaigns" trigger |
+| `/campaigns/[campaignId]` | 4-tab detail: Overview (narrative + threat actor + incidents), Timeline, Indicators, Response |
+| `/digital-twin` | 6 scenario cards with difficulty badges; runs simulation and shows accuracy/quality scores inline |
+| `/cost-intelligence` | KPI cards, savings breakdown, BarChart by agent, PieChart by model, LineChart trend, suggestions table |
+
+### Architecture Update
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PREMIUM FEATURE LAYER                        │
+│                                                                 │
+│  SelfReflectionAgent  ──►  /reflection/analyze                  │
+│  CampaignDetectionService ► /campaigns/detect                   │
+│  AutonomousInvestigationAgent ► /investigation/autonomous       │
+│  ConsensusService (GPT+Claude+Llama) ► /consensus/analyze       │
+│  DigitalTwinService  ──►  /digital-twin/run/{id}                │
+│  CostIntelligenceService ► /cost/summary                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Prerequisites
 
 | Requirement | Version |

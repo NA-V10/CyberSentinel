@@ -454,3 +454,181 @@ Clerk provides production-grade JWT authentication with built-in React component
 
 ### Neo4j for Knowledge Graph
 The property graph model naturally represents cybersecurity ontologies. Cypher queries for related-incident lookup and MITRE-mapped mitigation retrieval are concise and performant. The graph grows organically with every ingested incident.
+
+---
+
+## Final Premium Feature Set — Architecture
+
+### Updated System Diagram (Premium Layer)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          BROWSER / ANALYST CLIENT                               │
+│  /dashboard  /incidents  /war-room/{id}  /campaigns  /digital-twin             │
+│  /cost-intelligence  /campaigns/{id}  (+ all existing routes)                  │
+└───────────────────────────────────┬─────────────────────────────────────────────┘
+                                    │  HTTPS / WSS
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              FASTAPI BACKEND :8000                              │
+│                                                                                 │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │                     EXISTING AGENT WORKFLOW (v2)                         │   │
+│  │  Validation → Classification → Retrieval → Mitigation →                 │   │
+│  │  Escalation → Explainability → Judge → AssembleFinal → Feedback          │   │
+│  └─────────────────────────────┬────────────────────────────────────────────┘   │
+│                                │                                                │
+│  ┌─────────────────────────────▼────────────────────────────────────────────┐   │
+│  │                   PREMIUM FEATURE LAYER (v3)                             │   │
+│  │                                                                          │   │
+│  │  SelfReflectionAgent    ──► POST /reflection/analyze                     │   │
+│  │  (score < 7.5 → re-analyse, before/after comparison)                    │   │
+│  │                                                                          │   │
+│  │  CampaignDetectionService ► POST /campaigns/detect                       │   │
+│  │  (O(n²) pairwise clustering: IP subnet + MITRE + attack type)            │   │
+│  │                                                                          │   │
+│  │  AutonomousInvestigationAgent ► POST /investigation/autonomous           │   │
+│  │  (8 MCP tools: MITRE→IP→graph→similar→risk→mitigation→guardrails→report) │   │
+│  │                                                                          │   │
+│  │  ConsensusService      ──► POST /consensus/analyze                       │   │
+│  │  (GPT 0.45 + Claude 0.35 + Llama 0.20, auto weight redistribution)      │   │
+│  │                                                                          │   │
+│  │  DigitalTwinService    ──► POST /digital-twin/run/{scenario_id}          │   │
+│  │  (6 built-in scenarios, synthetic incidents, 85-95% accuracy scoring)    │   │
+│  │                                                                          │   │
+│  │  CostIntelligenceService ► GET /cost/summary|by-agent|by-model|savings   │   │
+│  │  (per-call token tracking, Redis savings, optimisation suggestions)      │   │
+│  └──────────────────────────────────────────────────────────────────────────┘   │
+└───────────────────┬─────────────────────────────────────────────────────────────┘
+                    │
+     ┌──────────────┼──────────────┬──────────────┐
+     │              │              │              │
+┌────▼────┐  ┌──────▼──────┐ ┌───▼────┐  ┌──────▼─────┐
+│PostgreSQL│  │   Qdrant    │ │ Neo4j  │  │   Redis    │
+│         │  │             │ │        │  │            │
+│(+10 new │  │             │ │Campaign│  │Cost cache  │
+│ tables) │  │             │ │Campaign│  │            │
+└─────────┘  └─────────────┘ └────────┘  └────────────┘
+```
+
+### Premium Agent Flow
+
+#### Self-Reflection Engine
+
+```
+LangGraph workflow completes → JudgeAgent assigns score
+  └─► SelfReflectionAgent.should_reflect(state)
+       ├─ judge_score >= 7.5 → "skip_reflection" (pass-through)
+       └─ judge_score < 7.5  → "reflect"
+            └─► _detect_weaknesses() [LLM call 1]
+                 └─► _run_improved_analysis() [LLM call 2, includes weaknesses as context]
+                      └─► _build_comparison() → before/after delta
+                           └─► DB: self_reflections table
+                                └─► WS: { type: "reflection", step: "complete", data: {...} }
+```
+
+#### Attack Campaign Detection
+
+```
+POST /campaigns/detect { incidents: [...], time_window_hours: 24 }
+  └─► _cluster_incidents()
+       ├─ For each pair (a, b):
+       │   similarity = IP_subnet(0.25) + attack_type(0.25) + MITRE(0.25)
+       │                + protocol(0.10) + severity(0.15)
+       │   similarity >= 0.6 → same cluster
+       └─ LLM campaign profiling → name, narrative, threat_actor_profile
+            └─► DB: campaigns + campaign_incidents (join table)
+```
+
+#### Autonomous Investigation (8-Step MCP Pipeline)
+
+```
+POST /investigation/autonomous { incident_text, source_ip, severity }
+  └─► Step 1: _tool_map_to_mitre()          → technique_id, tactic
+  └─► Step 2: _tool_lookup_ip_reputation()   → verdict, tags
+  └─► Step 3: _tool_query_threat_graph()     → related incidents (Neo4j)
+  └─► Step 4: _tool_search_similar_incidents() → top-K similar
+  └─► Step 5: _tool_calculate_risk()         → risk_score (0–100)
+  └─► Step 6: _tool_recommend_mitigation()   → 4-phase plan
+  └─► Step 7: _tool_check_guardrails()       → safety validation
+  └─► Step 8: _tool_generate_report()        → structured summary
+       └─► DB: autonomous_investigations + investigation_tool_calls
+            └─► WS events per tool step: { type: "tool_call", tool: "...", sequence: N }
+```
+
+#### Multi-LLM Consensus
+
+```
+POST /consensus/analyze { incident_text }
+  └─► Parallel execution:
+       ├─ _analyze_with_openai()   weight 0.45
+       ├─ _analyze_with_claude()   weight 0.35
+       └─ _analyze_with_llama()    weight 0.20
+  └─► _adjust_weights()  → redistribute proportionally for unavailable models
+  └─► _compute_consensus()
+       ├─ Weighted vote: classification (most weighted agreement wins)
+       ├─ Weighted average: severity score
+       └─ agreement_score = fraction of models aligned on final classification
+  └─► DB: consensus_results + consensus_model_outputs
+```
+
+#### Digital Twin Simulator
+
+```
+GET /digital-twin/scenarios → 6 built-in scenarios + any org-custom scenarios
+
+POST /digital-twin/run/{scenario_id}
+  └─► _generate_synthetic_incidents(n=5)
+       └─ Random IPs from scenario template subnet ranges
+       └─ Attack names, protocols, asset types from template
+  └─► _simulate_agent_response()
+       └─ 85–95% correct classification (random sample)
+       └─ Accuracy score + response quality score
+  └─► DB: digital_twin_runs + nested agent_responses JSON
+```
+
+#### Cost Intelligence
+
+```
+Every service call (self-reflection, consensus, investigation, etc.):
+  └─► cost_intelligence_service.log_usage(db,
+        org_id, model_name, prompt_tokens, completion_tokens,
+        workflow_name, agent_name, feature_name,
+        cache_hit=True/False, cache_savings=...)
+       └─► CostUsageLog row inserted
+            └─► estimate_cost(model_name, p_tokens, c_tokens) using _COST_RATES dict
+
+GET /cost/summary        → total_cost, total_tokens, avg_cost_per_call, date_range
+GET /cost/by-agent       → cost breakdown per agent_name
+GET /cost/by-model       → cost breakdown per model_name
+GET /cost/by-workflow    → cost breakdown per workflow_name
+GET /cost/by-user        → cost breakdown per user_id
+GET /cost/savings        → redis_savings, memory_reuse_savings, total_savings
+```
+
+### New Database Tables
+
+| Table | Key Columns | Purpose |
+|-------|-------------|---------|
+| `self_reflections` | id, org_id, incident_id, judge_score, reflection_triggered, weaknesses_detected, improved_analysis, final_confidence | Per-incident self-reflection records |
+| `campaigns` | id, org_id, campaign_name, confidence, incident_count, mitre_techniques, attack_narrative, threat_actor_profile | Detected attack campaign groups |
+| `campaign_incidents` | campaign_id, incident_id | Many-to-many campaign membership |
+| `autonomous_investigations` | id, org_id, incident_id, status, tool_calls (JSON), evidence_chain (JSON), findings, judge_score, duration_seconds | Autonomous investigation runs |
+| `investigation_tool_calls` | id, investigation_id, tool_name, sequence, duration_ms, input_params (JSON), output (JSON) | Per-tool invocation records |
+| `consensus_results` | id, org_id, incident_id, consensus_classification, agreement_score, weights_used (JSON), final_recommendation | Multi-LLM consensus outputs |
+| `consensus_model_outputs` | id, consensus_id, model_name, weight, classification, severity, confidence, key_findings | Per-model LLM output |
+| `digital_twin_scenarios` | id, org_id, name, scenario_type, severity, expected_mitre_technique, incident_count | Scenario catalogue entries |
+| `digital_twin_runs` | id, org_id, scenario_id, accuracy_score, response_quality_score, agent_responses (JSON) | Simulation run results |
+| `cost_usage_logs` | id, org_id, user_id, model_name, agent_name, workflow_name, prompt_tokens, completion_tokens, estimated_cost, cache_savings, cache_hit, feature_name | Per-call cost/token records |
+
+### New Frontend Routes (Premium)
+
+| Route | Key Components |
+|-------|---------------|
+| `/war-room/[id]` → Self-Reflection tab | Confidence display, weakness list, missing evidence tags, before/after comparison cards, improvement suggestions |
+| `/war-room/[id]` → Auto Investigation tab | Animated MCP tool call timeline (sequence + duration), evidence chain collapse, findings panel, final summary |
+| `/war-room/[id]` → Consensus Engine tab | Per-model output row table (weight, classification, severity, confidence), agreement score radial, disagreement panel, final recommendation |
+| `/campaigns` | Stats cards (active/total/avg confidence), search, campaign cards with confidence + status badges, "Detect Campaigns" button |
+| `/campaigns/[campaignId]` | 4 tabs: Overview (narrative, threat actor, related incidents, MITRE, IPs, assets), Timeline (vertical event list), Indicators (shared IOCs + cluster stats), Response (recommended steps) |
+| `/digital-twin` | 6 scenario cards (icon, difficulty badge, severity, incident count, MITRE); inline run result (accuracy bar, response quality, per-response dots) |
+| `/cost-intelligence` | KPI cards, savings breakdown (Redis / Memory / RAG), BarChart by agent, PieChart by model, LineChart 14-day trend, optimisation suggestions table |

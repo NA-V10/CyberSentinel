@@ -975,3 +975,185 @@ POST /api/v1/mcp/tools/{tool_name}/test   — Invoke a tool with provided parame
 ```
 
 **UI description:** The `/mcp-tools` page displays a grid of tool cards, each showing the tool name, description, parameter schema table, and an example invocation. A "Test Tool" button expands an inline form populated from the schema, with a "Run" button that fires the request and renders the JSON response in a syntax-highlighted panel. A connection status indicator shows whether the MCP server is reachable.
+
+---
+
+## Final Premium Feature Set
+
+**Version:** 3.0.0  
+**Date:** 2026-06-10  
+**Status:** General Availability
+
+Six enterprise-grade features built on top of the v2 platform. Every feature follows the same production standards as v2: async FastAPI routes, SQLAlchemy 2.0 ORM models, Clerk JWT authentication, `org_id` multi-tenant isolation, `audit_log_service.log_event()` on every endpoint, WebSocket event streaming via `ws_callback`, and mock fallbacks for operation without API keys.
+
+---
+
+### Feature 21 — Agent Self-Reflection Engine
+
+**Problem it solves:** The LLM-as-Judge provides a quality score but does not automatically trigger remediation when that score is low. A reflection loop that critiques the analysis and produces an improved version closes this gap without requiring analyst intervention.
+
+**Implementation approach:** After the JudgeAgent assigns a score, a `should_reflect` conditional edge evaluates `judge_score < _REFLECTION_SCORE_THRESHOLD` (default 7.5). When triggered, the `SelfReflectionAgent` makes two sequential LLM calls: the first detects weaknesses (missing evidence, low-confidence areas, incomplete reasoning), and the second produces an improved analysis with the detected gaps injected as additional context. A `_build_comparison()` helper generates a structured before/after delta. Results are persisted in `self_reflections`.
+
+**API contract:**
+```
+POST /api/v1/reflection/analyze
+Body: { "incident_text": "...", "initial_analysis": {...}, "judge_score": 6.2,
+        "incident_id": "uuid?" }
+Response: {
+  "reflection_triggered": true,
+  "weaknesses_detected": ["incomplete containment steps", "missing C2 analysis"],
+  "missing_evidence": ["lateral movement indicators"],
+  "improved_analysis": {...},
+  "before_after_comparison": { "added": [...], "changed": [...], "removed": [...] },
+  "final_confidence": 8.4
+}
+```
+
+**UI description:** A "Self-Reflection" tab in the war room. Displays the reflection trigger decision (triggered / skipped), final confidence score, an expandable weakness list, missing evidence tags, and a two-column before/after comparison card with colour-coded change indicators. A "Run Reflection" button triggers the analysis manually.
+
+---
+
+### Feature 22 — Attack Campaign Detection
+
+**Problem it solves:** Individual incident analysis misses coordinated multi-incident attacks that span time windows and IP ranges. SOC teams need automated clustering to detect campaigns before adversaries complete their objectives.
+
+**Implementation approach:** The `CampaignDetectionService.detect_campaigns()` function performs O(n²) pairwise incident scoring using five weighted similarity signals: IP /24 subnet overlap (0.25, via Python `ipaddress` module), attack type match (0.25), MITRE technique overlap (0.25), protocol match (0.10), and severity proximity (0.15). Pairs scoring ≥ 0.6 are merged into clusters. Each cluster is profiled by GPT (or a heuristic fallback) to generate a campaign name, attack narrative, and threat actor profile. Results are stored in the `campaigns` + `campaign_incidents` tables.
+
+**API contract:**
+```
+POST /api/v1/campaigns/detect
+Body: { "incidents": [ { "id": "...", "source_ip": "...", "attack_type": "...",
+         "severity": "...", "mitre_technique": "?" } ], "time_window_hours": 24 }
+Response: { "campaigns_detected": 2, "campaigns": [ {
+  "campaign_id": "uuid",
+  "campaign_name": "Credential Harvesting Campaign",
+  "campaign_confidence": 0.91,
+  "related_incidents": ["INC-102", "INC-118"],
+  "shared_indicators": ["subnet 45.33.x.x", "T1110"],
+  "attack_narrative": "...",
+  "threat_actor_profile": "..."
+} ] }
+
+GET /api/v1/campaigns          → paginated campaign list for org
+GET /api/v1/campaigns/{id}     → full campaign detail with timeline and response
+```
+
+**UI description:** The `/campaigns` page shows a stats row (active / total / avg confidence), a search bar, and campaign cards with confidence and status badges. Clicking a card opens the `/campaigns/[campaignId]` detail page with four tabs: Overview (attack narrative, threat actor profile, related incidents, MITRE techniques, source IPs, targeted assets), Timeline (vertical event list), Indicators (shared IOCs + cluster statistics), and Response (recommended countermeasures).
+
+---
+
+### Feature 23 — Autonomous Investigation Mode
+
+**Problem it solves:** Standard incident analysis requires the analyst to manually drive follow-up investigation steps (check IP reputation, query the graph, search similar incidents, etc.). Autonomous mode chains all these steps into a single pipeline, producing a complete investigation report without analyst orchestration.
+
+**Implementation approach:** The `AutonomousInvestigationAgent` executes eight MCP tool functions in sequence, each recording its inputs, outputs, duration, and sequence number. A `_call_tool()` wrapper handles per-tool telemetry. The pipeline: (1) MITRE mapping, (2) IP reputation lookup, (3) graph relationship query, (4) similar incident search, (5) risk calculation, (6) mitigation recommendation, (7) guardrails check, (8) final report generation. All results are assembled into an `evidence_chain` and `findings` dict, then scored by the judge. Persisted in `autonomous_investigations` and `investigation_tool_calls`.
+
+**API contract:**
+```
+POST /api/v1/investigation/autonomous
+Body: { "incident_text": "...", "source_ip": "?", "severity": "?", "incident_id": "?" }
+Response: {
+  "investigation_id": "uuid",
+  "tool_calls": [ { "tool": "map_to_mitre", "sequence": 1, "duration_ms": 340,
+                    "output": { "technique_id": "T1110", ... } } ],
+  "evidence_chain": { "mitre": {...}, "ip_reputation": {...}, ... },
+  "findings": { "threat_level": "high", "confidence": 0.89, ... },
+  "final_summary": "...",
+  "recommended_actions": ["..."],
+  "judge_score": 8.7,
+  "total_tool_calls": 8,
+  "duration_seconds": 12.4,
+  "status": "completed"
+}
+```
+
+**WebSocket events:** Each tool call emits `{ type: "tool_call", tool: "map_to_mitre", sequence: 1, status: "complete", duration_ms: 340 }` so the frontend can animate the tool pipeline in real time.
+
+**UI description:** An "Auto Investigation" tab in the war room with a vertical animated tool call timeline (tool name, sequence badge, duration, status icon), a collapsible evidence chain panel, a findings summary card, and the final judge-scored report.
+
+---
+
+### Feature 24 — Multi-LLM Consensus Engine
+
+**Problem it solves:** Single-model analysis introduces single-model bias. Adversarial or ambiguous incidents benefit from independent perspectives. Disagreements between models are themselves a signal of analytical uncertainty.
+
+**Implementation approach:** The `ConsensusService` invokes three LLM analyzers concurrently: `_analyze_with_openai()` (GPT-4.1-mini, weight 0.45), `_analyze_with_claude()` (Claude Haiku via Anthropic SDK, weight 0.35), and `_analyze_with_llama()` (Llama 3 via Ollama, weight 0.20). The `_adjust_weights()` function redistributes weights proportionally when any model is unavailable. `_compute_consensus()` performs weighted majority voting for classification and weighted averaging for severity scores. The `agreement_score` is the weighted fraction of models aligned on the winning classification. Results are stored in `consensus_results` and `consensus_model_outputs`.
+
+**API contract:**
+```
+POST /api/v1/consensus/analyze
+Body: { "incident_text": "...", "incident_id": "?" }
+Response: {
+  "model_outputs": [
+    { "model": "openai", "weight": 0.45, "classification": "brute_force",
+      "severity": "high", "confidence": 0.91, "key_findings": [...] },
+    { "model": "anthropic", "weight": 0.35, ... },
+    { "model": "local", "weight": 0.20, ... }
+  ],
+  "consensus_classification": "brute_force",
+  "agreement_score": 0.87,
+  "disagreement_summary": "Local model classified as network_intrusion (0.20 weight)",
+  "final_recommendation": "...",
+  "weights_used": { "openai": 0.45, "anthropic": 0.35, "local": 0.20 }
+}
+```
+
+**UI description:** A "Consensus Engine" tab in the war room showing a per-model output table (model, weight pill, classification, severity, confidence bar, key findings), an agreement score radial gauge, a disagreement summary card, and the final weighted recommendation panel. If a model is unavailable, its row shows a grey "unavailable" badge and the weights column shows the redistributed values.
+
+---
+
+### Feature 25 — AI SOC Digital Twin Simulator
+
+**Problem it solves:** Platform validation and analyst training require realistic, repeatable attack scenarios that do not affect production data or metrics. The built-in simulation mode uses fixed scenarios; the digital twin adds automated accuracy measurement and comparative analysis.
+
+**Implementation approach:** The `DigitalTwinService` maintains six `_BUILTIN_SCENARIOS` (phishing, malware, ddos, insider, brute_force, exfiltration) and per-type `_SCENARIO_TEMPLATES` containing IP ranges, protocols, attack names, and asset types. `_generate_synthetic_incidents()` creates randomised incidents from templates. `_simulate_agent_response()` samples 85–95% correct classifications to simulate realistic agent accuracy. Results are stored in `digital_twin_runs` and compared against the scenario's `expected_mitre_technique` and `expected_response`.
+
+**API contract:**
+```
+GET /api/v1/digital-twin/scenarios
+Response: { "scenarios": [ { "id": "scenario-phishing", "name": "Phishing Campaign",
+  "scenario_type": "phishing", "severity": "high", "difficulty": "medium",
+  "expected_mitre_technique": "T1566.001", "incident_count": 5 } ] }
+
+POST /api/v1/digital-twin/run/{scenario_id}
+Response: {
+  "run_id": "uuid",
+  "accuracy_score": 91,
+  "response_quality_score": 88,
+  "comparison_summary": "Excellent: 91% accuracy on 5 synthetic incidents.",
+  "agent_responses": [
+    { "incident_id": "SIM-0", "classification": "phishing",
+      "expected_classification": "phishing", "correct": true, "confidence": 0.89 }
+  ],
+  "recommendations": []
+}
+
+GET /api/v1/digital-twin/runs/{run_id}   → retrieve a past run
+POST /api/v1/digital-twin/compare        → compare two run IDs side-by-side
+```
+
+**UI description:** The `/digital-twin` page shows six scenario cards in a responsive grid. Each card displays the scenario icon, difficulty badge (easy / medium / hard), severity, MITRE technique, attack type, and synthetic incident count. A "Run Simulation" button fires the simulation; on completion, the card shows an inline result: accuracy bar chart, response quality percentage, and a row of green/red dots representing per-incident classification outcomes.
+
+---
+
+### Feature 26 — Cost Intelligence Platform
+
+**Problem it solves:** Enterprise AI deployments require visibility into per-workflow, per-model, and per-user token consumption and costs to control spending, identify optimisation opportunities, and demonstrate ROI.
+
+**Implementation approach:** `CostIntelligenceService.log_usage()` is called by every service that makes LLM calls, recording model name, prompt/completion tokens, estimated cost (from `_COST_RATES` per-model pricing), cache hit status, Redis cache savings, and memory reuse savings. The `estimate_cost()` function uses a dict of per-model input/output rates (e.g., `gpt-4.1-mini`: $0.00015/$0.00060 per 1K tokens). Six read endpoints aggregate these records for dashboarding. Five built-in optimisation suggestions are generated based on the usage pattern (e.g., "Switch to gpt-4.1-mini for classification tasks to reduce cost by ~40%").
+
+**API contract:**
+```
+GET /api/v1/cost/summary?days=30
+Response: { "total_cost": 12.47, "total_tokens": 1842000, "total_calls": 847,
+            "avg_cost_per_call": 0.0147, "date_range": "2026-05-11 to 2026-06-10" }
+
+GET /api/v1/cost/by-agent     → { "agents": [ { "agent_name": "...", "total_cost": ... } ] }
+GET /api/v1/cost/by-model     → { "models": [ { "model_name": "...", "total_cost": ... } ] }
+GET /api/v1/cost/by-workflow  → { "workflows": [ { "workflow_name": "...", "total_cost": ... } ] }
+GET /api/v1/cost/by-user      → { "users": [ { "user_id": "...", "total_cost": ... } ] }
+GET /api/v1/cost/savings      → { "redis_savings": 3.21, "memory_reuse_savings": 1.45,
+                                   "total_savings": 4.66, "savings_rate": 0.27 }
+```
+
+**UI description:** The `/cost-intelligence` page provides: (1) a day-range selector (7 / 30 / 90 days); (2) four KPI cards (Total Cost, Total Tokens, Avg Cost/Call, Total Savings); (3) savings breakdown cards (Redis Cache, Memory Reuse, RAG Deduplication); (4) a Recharts BarChart showing cost by agent; (5) a PieChart showing cost distribution by model; (6) a LineChart showing 14-day cost trend; (7) an optimisation suggestions table with priority badges (high / medium / low), estimated savings, and implementation effort indicators.

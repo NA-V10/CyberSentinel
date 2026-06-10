@@ -9,6 +9,7 @@ import {
   Shield, LayoutDashboard, AlertTriangle, Search, GitBranch,
   FileText, MessageSquare, Settings, ChevronLeft, ChevronRight,
   Menu, X, BarChart2, Zap, Wrench, Brain, ScrollText, Swords,
+  Target, FlaskConical, DollarSign, Network,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +62,14 @@ const navGroups: NavGroup[] = [
       { href: "/reports", label: "Reports", icon: FileText },
       { href: "/mcp-tools", label: "MCP Tools", icon: Wrench },
       { href: "/memory", label: "Memory Bank", icon: Brain },
+    ],
+  },
+  {
+    label: "Premium Features",
+    items: [
+      { href: "/campaigns", label: "Campaign Detection", icon: Target },
+      { href: "/digital-twin", label: "Digital Twin", icon: FlaskConical },
+      { href: "/cost-intelligence", label: "Cost Intelligence", icon: DollarSign },
     ],
   },
   {

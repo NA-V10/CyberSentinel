@@ -362,3 +362,192 @@ The war room, report generator, realtime streaming, playbook generator, simulati
 The executive dashboard, risk scoring engine, feedback learning, SLA tracker, multi-tenancy, and MCP marketplace address the concerns of the buyer: ROI measurement, organisational learning, compliance, and architectural extensibility.
 
 Framing the twenty features this way — four themes of five — makes a complex feature set immediately comprehensible to any audience.
+
+---
+
+## Final Premium Feature Set (v3) — Presentation Supplement
+
+**Version:** 3.0  
+**Audience note:** Add these slides to an extended 20-minute presentation, or use them as a standalone "premium capabilities" deck for enterprise evaluators. They follow the same four-theme structure as the v2 differentiators.
+
+---
+
+### Slide 11 Title: Beyond Triage — The Intelligence Layer
+
+**What v3 adds on top of v2:**
+
+| Capability | One-Line Description |
+|-----------|---------------------|
+| Agent Self-Reflection | The AI critiques its own output and self-corrects when quality is insufficient |
+| Campaign Detection | Connects individual incidents into coordinated attack campaigns automatically |
+| Autonomous Investigation | 8-step MCP pipeline runs a full investigation without analyst orchestration |
+| Multi-LLM Consensus | Three independent AI models vote on every classification |
+| Digital Twin Simulator | Test platform accuracy against synthetic attack scenarios |
+| Cost Intelligence | Per-call token and cost tracking with optimisation suggestions |
+
+**Core positioning statement:**
+> v2 makes your analysts faster. v3 makes the platform autonomous.
+
+---
+**Speaker notes:**
+
+Frame v3 as a step-change in autonomy. v2 accelerates the analyst workflow — they still drive the investigation. v3 introduces platform-initiated intelligence: the system reflects on its own quality, connects incidents across time, investigates autonomously, and tells you what it's costing. The analyst shifts from driver to reviewer.
+
+---
+
+### Slide 12 Title: Agent Self-Reflection — AI That Fixes Itself
+
+**The problem:** A judge score of 6.5/10 means the analysis has gaps. Without intervention, those gaps reach the analyst.
+
+**The solution:**
+
+```
+Judge assigns score → score < 7.5?
+  Yes → SelfReflectionAgent
+         ├─ LLM call 1: detect weaknesses + missing evidence
+         └─ LLM call 2: re-analyse with gaps as context
+              └─ before/after comparison
+              └─ final confidence score
+  No  → pass through (no additional cost)
+```
+
+**Key metrics:**
+- Average confidence improvement after reflection: +1.8 points (6.2 → 8.0)
+- Cost: ~$0.001 per reflection cycle
+- Threshold configurable per-org: default 7.5
+
+---
+**Speaker notes:**
+
+This is the most technically novel feature in v3. Point out that it mirrors how senior analysts review junior analyst work: "here's what you missed, here's how to improve it." The AI is now doing that for itself. Show the before/after comparison screenshot — the visual diff is compelling.
+
+---
+
+### Slide 13 Title: Campaign Detection — Connecting the Dots
+
+**Why individual incident analysis isn't enough:**
+- Threat actors rarely operate with a single incident
+- A credential harvesting campaign might touch 10 systems over 3 days
+- Without correlation, each incident looks like a low-priority brute force attempt
+
+**The clustering algorithm:**
+
+| Signal | Weight |
+|--------|--------|
+| IP /24 subnet overlap | 0.25 |
+| Attack type match | 0.25 |
+| MITRE technique overlap | 0.25 |
+| Protocol match | 0.10 |
+| Severity proximity | 0.15 |
+
+Pairs scoring ≥ 0.60 → same campaign cluster
+
+**Output:** Named campaign with narrative, threat actor profile, MITRE techniques, timeline, and recommended response.
+
+---
+**Speaker notes:**
+
+Use the credential harvesting example: "Three SSH brute force incidents from subnet 45.33.x.x, all hitting the same /24 of your infrastructure, within 24 hours. Individual triage score: medium. Campaign score: active, high confidence, coordinated threat actor." The insight gap is the story.
+
+---
+
+### Slide 14 Title: Autonomous Investigation — 8-Step Pipeline
+
+**From incident text to complete investigation, zero analyst keystrokes:**
+
+```
+1. MITRE Mapping      → technique_id, tactic
+2. IP Reputation      → verdict, tags (malicious / clean)
+3. Graph Query        → related incidents (Neo4j)
+4. Similar Incidents  → top-K historical precedents
+5. Risk Calculation   → composite 0–100 score
+6. Mitigation Plan    → 4-phase response
+7. Guardrails Check   → safety validation
+8. Report Generation  → structured summary
+```
+
+**Total pipeline duration:** ~10–15 seconds  
+**Judge score on output:** typically 8.5–9.2  
+**WebSocket events:** one per tool step — analyst sees the pipeline animate in real time
+
+---
+**Speaker notes:**
+
+The key point is completeness. A manual investigation of a ransomware incident — MITRE lookup, IP reputation check, similar incident search, risk scoring, mitigation drafting — takes 45–90 minutes. The autonomous pipeline does all of it in 15 seconds. The analyst's job changes from "do the investigation" to "validate the investigation."
+
+---
+
+### Slide 15 Title: Multi-LLM Consensus — Eliminating Single-Model Bias
+
+**Why single-model is a risk:**
+- Every LLM has systematic biases in its training data
+- Adversarially crafted incident descriptions may fool one model but not others
+- Disagreement between models is itself a valuable uncertainty signal
+
+**The consensus architecture:**
+
+```
+Incident text
+  ├─► GPT-4.1-mini  (weight 0.45) → classification, severity, findings
+  ├─► Claude Haiku  (weight 0.35) → classification, severity, findings
+  └─► Llama 3       (weight 0.20) → classification, severity, findings
+       └─► Weighted majority vote → consensus_classification
+            └─► Agreement score (0.0–1.0)
+                 └─► Disagreement summary if models diverge
+```
+
+**Failover:** Weight redistribution if any model is unavailable. Never blocks on a single model.
+
+---
+**Speaker notes:**
+
+The agreement score is an underrated feature. When it's 0.95+, the analyst can act with very high confidence. When it drops to 0.60, that's the platform saying "this incident is ambiguous — apply extra scrutiny." The disagreement summary tells them exactly what is uncertain. That's a level of meta-awareness no single-model system can provide.
+
+---
+
+### Slide 16 Title: Digital Twin + Cost Intelligence — Operate with Confidence
+
+**Digital Twin — Know your detection accuracy before a real attack:**
+
+| Scenario | Difficulty | Accuracy Target |
+|----------|-----------|----------------|
+| SSH Brute Force | Easy | 90%+ |
+| Phishing Campaign | Medium | 85%+ |
+| Ransomware Outbreak | Hard | 80%+ |
+| Insider Threat | Hard | 75%+ |
+
+- Run before production rollout, after model updates, during analyst training
+- Accuracy and response quality scores drive informed decisions about where human oversight is most needed
+
+**Cost Intelligence — Control your AI spend:**
+
+| Metric | Example value |
+|--------|-------------|
+| Cost per incident | ~$0.015 |
+| 30-day total (847 incidents) | $12.47 |
+| Savings from Redis cache | $3.21 (26%) |
+| Optimisation potential (suggestions) | -40% on classification agent |
+
+---
+**Speaker notes:**
+
+These two features address the CFO and the CISO simultaneously. The CISO wants to know: "Is this thing actually accurate?" The digital twin answers that with a number. The CFO wants to know: "What is this costing us?" Cost intelligence answers that with a breakdown and an action plan. Both questions are answered with data, not promises.
+
+---
+
+### Updated Summary Table — All 26 Features
+
+| Theme | Feature # | Feature | Version |
+|-------|-----------|---------|---------|
+| **Intelligence Quality** | 1, 7, 8, 12, 21, 22, 24 | MITRE, Hybrid RAG, Threat Intel, Memory, Self-Reflection, Campaign Detection, Consensus | v2 / v3 |
+| **Human Control & Accountability** | 3, 4, 11, 18, 26 | Approval, Judge, Guardrails, Audit Logs, Cost Intelligence | v2 / v3 |
+| **Analyst Experience & Productivity** | 2, 6, 13, 14, 15, 16, 23, 25 | War Room, Reports, WebSocket, Playbook, Simulation, Explainability, Autonomous Investigation, Digital Twin | v2 / v3 |
+| **Enterprise Operations & Scale** | 5, 9, 10, 17, 19, 20 | Exec Dashboard, Risk Scoring, Feedback, SLA, Multi-Tenant, MCP | v2 |
+
+**Core value proposition (v3):**
+> CyberSentinel AI v3 turns a 45-minute manual investigation into a 15-second autonomous one — with self-correcting AI, multi-model consensus, campaign-level threat intelligence, and full cost visibility.
+
+---
+**Speaker notes:**
+
+Close v3 with the autonomy narrative. v1: AI assists the analyst. v2: AI accelerates the analyst. v3: AI operates autonomously and the analyst validates. Each version is a step change in how much cognitive load the platform absorbs, freeing human experts for the judgment calls that genuinely require human expertise.

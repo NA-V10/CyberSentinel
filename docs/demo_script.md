@@ -285,3 +285,198 @@ Open: `http://localhost:3000/mcp-tools`
 | *What does scaling look like?* | The FastAPI backend is stateless — multiple instances behind a load balancer. Qdrant, Neo4j, and PostgreSQL all support clustering. Redis provides shared session state for WebSocket fan-out in multi-instance deployments. |
 | *How is multi-tenancy enforced?* | `org_id` is extracted from the Clerk JWT on every request. It is applied as a filter at the application layer on all database queries, Qdrant searches, and Neo4j traversals. No cross-org data access is possible through the API. |
 | *What frameworks and compliance standards does this support?* | MITRE ATT&CK for threat taxonomy, SOC 2 / ISO 27001 through the tamper-evident audit log, and GDPR through per-user data scoping and the right-to-deletion workflow available through the admin interface. |
+
+---
+
+## Extended Demo — Final Premium Feature Set (10 Minutes)
+
+**Prerequisite:** All seven baseline scenes complete. Platform still open at the war room from Scene 3/4.
+
+---
+
+### Scene 8 — Agent Self-Reflection Engine (1.5 minutes)
+
+#### Navigation
+Still in the war room from Scene 3. Click the **Self-Reflection** tab.
+
+#### What to Show
+1. The tab header shows "Self-Reflection Engine" with a status badge
+2. If the judge score from the previous analysis was below 7.5: the badge reads **Triggered** (amber) and all fields are populated
+3. If the score was above 7.5: show the **Run Reflection** button and click it manually — this forces a reflection cycle for demo purposes
+4. After triggering, three sections populate:
+   - **Weaknesses Detected** — a list of tags: e.g., "incomplete containment steps", "missing C2 analysis", "low confidence on attribution"
+   - **Missing Evidence** — tags: e.g., "lateral movement indicators", "persistence mechanism"
+   - **Before / After Comparison** — two cards side by side showing the original analysis summary vs. the improved version, with changed lines highlighted in amber and new lines in green
+5. At the bottom: **Final Confidence** badge — e.g., 8.4 / 10 (up from 6.2 before reflection)
+
+#### What to Say
+*"Most AI platforms stop at generating an answer. CyberSentinel AI goes one step further with the Self-Reflection Engine. After the LLM judge assigns its quality score, if that score falls below 7.5 — meaning the analysis has gaps — the system automatically enters a reflection loop.*
+
+*First, it critiques its own output: what was missing? What was low confidence? Then it runs a second, improved analysis with those gaps as additional context. The before/after comparison you're seeing here is generated automatically — you can see exactly what changed and why.*
+
+*The final confidence went from 6.2 to 8.4. No analyst had to ask for a retry. The system caught its own shortcomings and corrected them."*
+
+---
+
+### Scene 9 — Attack Campaign Detection (2 minutes)
+
+#### Navigation
+Open: `http://localhost:3000/campaigns`
+
+#### What to Show
+1. The page loads with three existing campaigns — stats cards at the top show: **3 Active**, **9 Total Incidents**, **84% Avg Confidence**
+2. Point to the first campaign card: **Credential Harvesting Campaign** — 91% confidence, 3 related incidents (INC-102, INC-118, INC-130), time window: 24 hours
+3. Click **Detect Campaigns** — a loading indicator appears; after 2–3 seconds a toast appears: "Campaign detection completed"
+4. Click into **Credential Harvesting Campaign**:
+   - **Overview tab**: Attack narrative ("A coordinated credential harvesting campaign targeting SSH services…"), threat actor profile, related incidents list
+   - **Timeline tab**: Three events with relative timestamps — T+0h first detection, T+4h second host targeted, T+18h successful authentication
+   - **Indicators tab**: Shared indicators (source subnet 45.33.x.x, MITRE T1110, SSH brute force), cluster statistics card
+   - **Response tab**: Recommended countermeasures with numbered steps
+
+#### What to Say
+*"This is Campaign Detection — one of the most strategically important features for a SOC. An individual incident looks like a brute force attempt. But three incidents from the same /24 IP subnet, using the same MITRE technique, within 24 hours? That's a coordinated campaign.*
+
+*The detection algorithm scores each pair of incidents across five dimensions: IP subnet overlap, attack type, MITRE technique, protocol, and severity. Pairs scoring above 60% similarity are grouped into campaigns.*
+
+*What you're seeing here is the platform connecting the dots automatically. INC-102, INC-118, and INC-130 are not three separate brute force incidents — they're a single threat actor systematically probing your SSH infrastructure. The timeline shows the attacker succeeded on the third host at T+18 hours. With manual analysis, that connection might never have been made until after the breach was confirmed."*
+
+---
+
+### Scene 10 — Autonomous Investigation Mode (2 minutes)
+
+#### Navigation
+Return to the war room from Scene 3. Click the **Auto Investigation** tab.
+
+#### What to Show
+1. Click **Run Autonomous Investigation** — a loading indicator appears
+2. A WebSocket-driven tool call timeline begins animating, showing 8 sequential steps:
+   - **1. MITRE Mapping** — ✓ T1486 detected (0.3s)
+   - **2. IP Reputation** — ✓ 91.108.4.1 flagged malicious (0.5s)
+   - **3. Graph Query** — ✓ 12 related incidents found (0.8s)
+   - **4. Similar Incidents** — ✓ 6 historical precedents retrieved (1.1s)
+   - **5. Risk Calculation** — ✓ Risk score: 94/100 (0.2s)
+   - **6. Mitigation** — ✓ 4-phase plan generated (1.4s)
+   - **7. Guardrails Check** — ✓ Safe: true (0.1s)
+   - **8. Report Generation** — ✓ Summary compiled (0.9s)
+3. Below the timeline: the **Evidence Chain** collapse — click to expand and show each tool's structured output
+4. **Findings Panel** shows: threat_level: high, confidence: 0.89, key indicators, total tool calls: 8, duration: 12.4s
+5. **Judge Score** badge: 8.7 / 10
+
+#### What to Say
+*"Autonomous Investigation Mode turns the war room into an automated investigation engine. With a single click, the platform runs eight investigation steps in sequence — each one an MCP tool — and assembles everything into a complete investigation report.*
+
+*Watch the tool timeline: MITRE mapping, IP reputation, graph query, similar incident search, risk calculation, mitigation generation, guardrails check, and final report. Eight steps, 12 seconds, no analyst intervention required.*
+
+*This is the difference between an AI that answers questions and an AI that proactively investigates. The junior analyst doesn't need to know which lookups to run — the platform knows, and it runs them all. The senior analyst gets a complete investigation package ready for review."*
+
+---
+
+### Scene 11 — Multi-LLM Consensus Engine (1.5 minutes)
+
+#### Navigation
+Still in the war room. Click the **Consensus Engine** tab.
+
+#### What to Show
+1. Click **Run Consensus Analysis**
+2. Three model cards populate showing per-model output:
+   - **GPT-4.1-mini** (weight: 0.45) — Classification: malware, Severity: critical, Confidence: 0.94, Key findings: ["C2 communication detected", "shadow copy deletion confirmed"]
+   - **Claude Haiku** (weight: 0.35) — Classification: malware, Severity: critical, Confidence: 0.91, Key findings: ["ransomware indicators", "multiple affected hosts"]
+   - **Llama 3** (weight: 0.20) — Classification: malware, Severity: high, Confidence: 0.82, Key findings: ["endpoint compromise", "unusual outbound traffic"]
+3. **Agreement Score** radial gauge: 0.87 (87% weighted agreement)
+4. **Disagreement Summary** card: "Local model (0.20 weight) assessed severity as high rather than critical"
+5. **Final Recommendation**: Consensus classification: malware, Severity: critical
+
+#### What to Say
+*"The Consensus Engine is CyberSentinel AI's answer to single-model bias. Instead of trusting one AI's classification, we run the same incident through three independent models simultaneously — GPT, Claude, and Llama — each with calibrated weights reflecting their performance on cybersecurity analysis.*
+
+*All three models agree on the threat class: malware. GPT and Claude both say critical severity; Llama says high. The weighted agreement score is 87%. The consensus decision is malware, critical — aligned with the two higher-weighted models.*
+
+*When models disagree significantly, that disagreement is itself a signal. It tells the analyst: 'this incident is ambiguous, apply more scrutiny.' And when three independent models converge on the same classification, the analyst can act with higher confidence.*
+
+*If any model is unavailable, the weights redistribute automatically. The system always produces a consensus."*
+
+---
+
+### Scene 12 — AI SOC Digital Twin Simulator (1.5 minutes)
+
+#### Navigation
+Open: `http://localhost:3000/digital-twin`
+
+#### What to Show
+1. Six scenario cards load in a grid:
+   - Phishing Campaign (medium difficulty, high severity)
+   - Malware Outbreak (hard, critical)
+   - DDoS Traffic Spike (medium, high)
+   - Insider Threat (hard, critical)
+   - SSH Brute Force (easy, medium)
+   - Data Exfiltration (hard, critical)
+2. Click **Run Simulation** on the **SSH Brute Force** scenario (easy, to ensure a clean result)
+3. A loading indicator appears: "Running Simulation…"
+4. After 2–3 seconds the card shows an inline result:
+   - **91% accuracy** (amber bar animates to 91%)
+   - **Response quality: 88%**
+   - 6 response dots — 5 green (correct), 1 red (misclassified)
+   - Summary: "Excellent: 91% accuracy on 6 synthetic incidents."
+5. Now click **Run Simulation** on the **Malware Outbreak** (hard) to contrast:
+   - Result typically shows 75–80% accuracy
+   - More red dots appear
+   - Summary: "Good: 77% accuracy. Some misclassifications detected."
+
+#### What to Say
+*"The Digital Twin Simulator lets you test the platform's detection capabilities against synthetic attack scenarios without touching production data. Think of it as a flight simulator for your SOC.*
+
+*When I run the SSH Brute Force scenario — a well-understood attack type — the platform achieves 91% classification accuracy on the synthetically generated incidents. When I run the Malware Outbreak — a more complex scenario — accuracy drops to 77%. That delta tells me exactly where the model needs more training data or where human analyst oversight is most valuable.*
+
+*Security teams can use this for analyst training: 'here's a simulated ransomware attack — what would you do?' They can use it for compliance demonstrations: 'here's evidence that our AI correctly identified a DDoS attack 9 times out of 10.' And they can use it for regression testing after any model update."*
+
+---
+
+### Scene 13 — Cost Intelligence Platform (1.5 minutes)
+
+#### Navigation
+Open: `http://localhost:3000/cost-intelligence`
+
+#### What to Show
+1. The page loads with four KPI cards:
+   - **Total Cost**: $12.47 (last 30 days)
+   - **Total Tokens**: 1.84M
+   - **Avg Cost / Call**: $0.015
+   - **Total Savings**: $4.66
+2. Savings breakdown row: Redis Cache $3.21, Memory Reuse $1.45, RAG Deduplication ~$0.00 (or small amount)
+3. **BarChart** — cost by agent: MitigationAgent highest (~$4.20), followed by ExplainabilityAgent, ConsensusService
+4. **PieChart** — cost by model: GPT-4.1-mini dominates, small slices for Claude and Llama
+5. **LineChart** — 14-day cost trend: relatively flat with a spike on the day of the ransomware simulation
+6. **Optimisation Suggestions** table — show at least two suggestions:
+   - "Use gpt-4.1-mini for classification tasks — saves ~40% vs. larger models" (High priority)
+   - "Increase Redis TTL for ML predictions from 30min to 2h — saves ~15% on repeated similar flows" (Medium priority)
+
+#### What to Say
+*"The Cost Intelligence Platform gives engineering and finance teams full visibility into AI spending across every workflow, agent, and model. This is the conversation every enterprise AI deployment eventually needs to have.*
+
+*You're looking at $12.47 in LLM costs for 847 incidents over 30 days. That's about 1.5 cents per incident. The industry cost of a human analyst spending 45 minutes on triage is roughly $20–30, depending on fully-loaded salary. The ROI is not close.*
+
+*The savings section shows $4.66 in avoided costs: $3.21 from Redis caching — incidents with similar network flow signatures don't re-invoke the LLM, they get cached results. $1.45 from memory reuse — when the memory system already has context for this type of incident, fewer embedding lookups are needed.*
+
+*The optimisation suggestions are automatically generated from the usage pattern. The platform is telling you: switch the classification agent to gpt-4.1-mini and you'll save 40% of that column's cost. That's a one-line config change worth significant savings at scale."*
+
+---
+
+### Updated Pre-Demo Checklist (Premium Features)
+
+Add these items to the existing checklist before running the premium demo:
+
+- [ ] `/campaigns` shows at least 2–3 mock campaigns (loads automatically from mock data)
+- [ ] `/digital-twin` shows all 6 scenario cards (loads from built-in scenario catalogue)
+- [ ] `/cost-intelligence` shows charts (uses mock data if no real usage logs present)
+- [ ] War room open with an incident that has been through the full judge pipeline
+- [ ] Confirm mock fallbacks active: self-reflection, consensus, and autonomous investigation all work without API keys
+
+### Extended Q&A Talking Points (Premium Features)
+
+| Question | Talking Point |
+|----------|--------------|
+| *What does the self-reflection loop cost in extra tokens?* | Two additional LLM calls per reflection — approximately 1,000–2,000 tokens total. At $0.00015/1K tokens, that's under $0.001 per reflection. The quality improvement from a re-analysis that catches critical gaps is worth far more. |
+| *How does campaign detection handle large incident volumes?* | The current implementation uses O(n²) pairwise scoring, which is appropriate for daily incident windows (typically 10–200 incidents). For high-volume environments, the algorithm can be replaced with approximate nearest-neighbour clustering over the similarity embedding space. |
+| *What if one LLM in the consensus is unavailable?* | `_adjust_weights()` redistributes the unavailable model's weight proportionally to the remaining models. The system always produces a consensus — it never blocks on a single model's availability. |
+| *Can we add custom digital twin scenarios?* | Yes — POST to `/digital-twin/scenarios` with your custom scenario definition. Custom scenarios are stored per-org in `digital_twin_scenarios` and appear alongside the 6 built-in scenarios. |
+| *Is cost tracking real-time?* | Yes — `CostIntelligenceService.log_usage()` is called synchronously within each service. Costs are visible in the dashboard within seconds of the API call completing. |

@@ -83,13 +83,14 @@ def create_app() -> FastAPI:
     # Middleware
     # ------------------------------------------------------------------
 
-    # CORS — allow all origins in development; tighten in production via env
+    # CORS — regex matches any localhost/127.0.0.1 port; production domains listed explicitly.
+    # Using allow_origin_regex avoids Starlette exact-match quirks with allow_credentials=True.
+    _origin_regex = r"http://(localhost|127\.0\.0\.1)(:\d+)?"
+    _explicit_origins = ["https://cybersentinel.ai", "https://app.cybersentinel.ai"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"] if settings.DEBUG else [
-            "https://cybersentinel.ai",
-            "https://app.cybersentinel.ai",
-        ],
+        allow_origins=_explicit_origins,
+        allow_origin_regex=_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -309,6 +310,46 @@ def _register_routers(app: FastAPI) -> None:
         app.include_router(war_room_ws_router, prefix=f"{prefix}/ws", tags=["war-room-ws"])
     except ImportError:
         logger.warning("War room WebSocket router not found — skipping")
+
+    # ------------------------------------------------------------------
+    # Final Premium Feature Set — v3
+    # ------------------------------------------------------------------
+
+    try:
+        from backend.app.api.reflection import router as reflection_router
+        app.include_router(reflection_router, prefix=f"{prefix}/reflection", tags=["Self-Reflection"])
+    except ImportError:
+        logger.warning("Self-Reflection router not found — skipping")
+
+    try:
+        from backend.app.api.campaigns import router as campaigns_router
+        app.include_router(campaigns_router, prefix=f"{prefix}/campaigns", tags=["Campaigns"])
+    except ImportError:
+        logger.warning("Campaigns router not found — skipping")
+
+    try:
+        from backend.app.api.autonomous_investigation import router as auto_inv_router
+        app.include_router(auto_inv_router, prefix=f"{prefix}/investigation", tags=["Autonomous Investigation"])
+    except ImportError:
+        logger.warning("Autonomous Investigation router not found — skipping")
+
+    try:
+        from backend.app.api.consensus import router as consensus_router
+        app.include_router(consensus_router, prefix=f"{prefix}/consensus", tags=["Consensus Engine"])
+    except ImportError:
+        logger.warning("Consensus router not found — skipping")
+
+    try:
+        from backend.app.api.digital_twin import router as digital_twin_router
+        app.include_router(digital_twin_router, prefix=f"{prefix}/digital-twin", tags=["Digital Twin"])
+    except ImportError:
+        logger.warning("Digital Twin router not found — skipping")
+
+    try:
+        from backend.app.api.cost_intelligence import router as cost_router
+        app.include_router(cost_router, prefix=f"{prefix}/cost", tags=["Cost Intelligence"])
+    except ImportError:
+        logger.warning("Cost Intelligence router not found — skipping")
 
 
 # ---------------------------------------------------------------------------
