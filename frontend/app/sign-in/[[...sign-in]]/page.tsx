@@ -30,6 +30,8 @@ export default function SignInPage() {
       {/* Clerk SignIn Component */}
       <div className="relative z-10">
         <SignIn
+          forceRedirectUrl="/dashboard"
+          fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
               rootBox: "w-full",

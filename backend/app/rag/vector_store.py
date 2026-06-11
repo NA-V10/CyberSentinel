@@ -71,10 +71,16 @@ class VectorStoreService:
         """
         try:
             existing = await self._client.get_collection(self._collection)
+            # `vectors_count` was renamed to `points_count` in newer Qdrant SDK versions
+            count = (
+                getattr(existing, "points_count", None)
+                or getattr(existing, "vectors_count", None)
+                or 0
+            )
             logger.info(
                 "Qdrant collection already exists, skipping creation",
                 collection=self._collection,
-                vectors_count=existing.vectors_count,
+                points_count=count,
             )
             return
         except (UnexpectedResponse, Exception) as exc:

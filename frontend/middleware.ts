@@ -23,12 +23,15 @@ const isClerkConfigured =
 
 // When Clerk keys are not yet configured, skip auth so the app is usable
 // during local dev without a Clerk account.
-export default clerkMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   if (!isClerkConfigured) {
     return NextResponse.next();
   }
   if (isProtectedRoute(req)) {
-    auth().protect();
+    const { userId, redirectToSignIn } = await auth();
+    if (!userId) {
+      return redirectToSignIn();
+    }
   }
 });
 

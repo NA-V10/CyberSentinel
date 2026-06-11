@@ -27,7 +27,8 @@ from backend.app.core.redis_client import cache_get, cache_set
 
 JWKS_CACHE_KEY = "clerk:jwks"
 JWKS_TTL = 3600  # 1 hour
-JWKS_URL = "https://api.clerk.dev/v1/jwks"
+# Use the instance-specific public JWKS endpoint (no auth required, no 503 risk)
+JWKS_URL = f"{settings.CLERK_JWT_ISSUER}/.well-known/jwks.json" if settings.CLERK_JWT_ISSUER else "https://api.clerk.dev/v1/jwks"
 
 # FastAPI bearer scheme (auto_error=False so we can return a custom 401)
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -38,12 +39,9 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 # ---------------------------------------------------------------------------
 
 async def _fetch_jwks() -> Dict[str, Any]:
-    """Fetch JWKS from Clerk, returning the raw JSON dict."""
-    headers: Dict[str, str] = {}
-    if settings.CLERK_SECRET_KEY:
-        headers["Authorization"] = f"Bearer {settings.CLERK_SECRET_KEY}"
+    """Fetch JWKS from the Clerk instance's public well-known endpoint."""
     async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(JWKS_URL, headers=headers)
+        resp = await client.get(JWKS_URL)
         resp.raise_for_status()
         return resp.json()
 

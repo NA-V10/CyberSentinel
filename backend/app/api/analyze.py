@@ -12,11 +12,9 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.agents.workflow import build_initial_state, create_workflow
 from backend.app.auth.clerk import get_current_user
-from backend.app.core.database import get_db
 from backend.app.core.logging import logger as app_logger
 from backend.app.schemas.incident import (
     AnalyzeIncidentRequest,
@@ -39,7 +37,6 @@ _workflow = create_workflow()
 async def analyze_incident(
     request: AnalyzeIncidentRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
 ) -> AnalyzeIncidentResponse:
     """Run the CyberSentinel AI multi-agent workflow on the submitted incident.
 

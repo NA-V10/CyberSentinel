@@ -30,6 +30,8 @@ export default function SignUpPage() {
       {/* Clerk SignUp Component */}
       <div className="relative z-10">
         <SignUp
+          forceRedirectUrl="/dashboard"
+          fallbackRedirectUrl="/dashboard"
           appearance={{
             elements: {
               rootBox: "w-full",
