@@ -273,4 +273,5 @@ def build_initial_state(
         final_answer=None,
         messages=[],
         retry_count=0,
+        incident_id=None,
     )

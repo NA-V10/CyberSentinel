@@ -13,6 +13,7 @@ const isProtectedRoute = createRouteMatcher([
   "/mcp-tools(.*)",
   "/memory(.*)",
   "/audit-logs(.*)",
+  "/onboarding(.*)",
 ]);
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";

@@ -107,12 +107,22 @@ async def analyze_incident(
         for inc in similar_raw
     ]
 
+    # Resolve incident_id written to state by feedback_agent after DB+Qdrant persistence
+    raw_incident_id: str | None = final_state.get("incident_id")
+    persisted_incident_id: uuid.UUID | None = None
+    if raw_incident_id:
+        try:
+            persisted_incident_id = uuid.UUID(raw_incident_id)
+        except (ValueError, AttributeError):
+            pass
+
     app_logger.info(
         "analyze_incident: complete",
         user_id=user_id,
         threat_class=threat_class,
         judge_score=judge_score,
         escalation=escalation_level,
+        incident_id=str(persisted_incident_id) if persisted_incident_id else None,
     )
 
     return AnalyzeIncidentResponse(
@@ -124,7 +134,7 @@ async def analyze_incident(
         explanation=explanation,
         judge_score=round(judge_score, 4),
         graph_data=graph_context,
-        incident_id=None,   # populated by feedback agent asynchronously
+        incident_id=persisted_incident_id,
         conversation_id=None,
         session_id=session_id,
     )

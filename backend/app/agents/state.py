@@ -77,3 +77,8 @@ class AgentState(TypedDict):
     # Internal retry counter (used by workflow to guard against infinite loops)
     # -----------------------------------------------------------------------
     retry_count: int
+
+    # -----------------------------------------------------------------------
+    # Persisted record identifier (set by feedback_agent after DB write)
+    # -----------------------------------------------------------------------
+    incident_id: Optional[str]

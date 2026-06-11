@@ -12,7 +12,6 @@ Responsibilities:
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -125,7 +124,13 @@ async def _update_incident(
         valid = {"low", "medium", "high", "critical"}
         severity_norm = sv if sv in valid else None
 
+    # Pre-generate the UUID so embedding_id can reference it in the same transaction.
+    # The Qdrant point ID is derived from this UUID (see _to_qdrant_id), so both
+    # stores share a stable identifier without a second DB round-trip.
+    incident_uuid = uuid.uuid4()
+
     incident = Incident(
+        id=incident_uuid,
         user_id=user_id,
         source_ip=state_snapshot.get("source_ip"),
         dest_ip=state_snapshot.get("dest_ip"),
@@ -133,6 +138,7 @@ async def _update_incident(
         attack_type=threat_class,
         severity=severity_norm,
         raw_text=state_snapshot.get("incident_text"),
+        embedding_id=str(incident_uuid),
     )
     db.add(incident)
     await db.flush()
@@ -220,10 +226,10 @@ async def _persist(state: AgentState) -> Optional[uuid.UUID]:
 
 
 async def feedback_agent(state: AgentState) -> Dict[str, Any]:
-    """LangGraph node: persist conversation data asynchronously.
+    """LangGraph node: persist conversation + incident data to Neon and Qdrant.
 
-    This node fires off a background task so it does not add latency to the
-    response returned to the analyst.
+    Runs synchronously so that the incident_id is available in the final state
+    and can be returned to the caller via the HTTP response.
 
     Parameters
     ----------
@@ -233,11 +239,10 @@ async def feedback_agent(state: AgentState) -> Dict[str, Any]:
     Returns
     -------
     dict
-        Empty state update (this agent only has side-effects).
+        Partial state update containing ``incident_id``.
     """
-    logger.info("FeedbackAgent started (non-blocking)")
+    logger.info("FeedbackAgent started")
 
-    # Schedule persistence as a background task so it doesn't block the graph
-    asyncio.ensure_future(_persist(state))
+    incident_id = await _persist(state)
 
-    return {}
+    return {"incident_id": str(incident_id) if incident_id else None}
