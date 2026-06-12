@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     # ML
     ML_MODEL_PATH: str = "models/threat_classifier.joblib"
 
+    # OpenClaw — Jira integration
+    JIRA_BASE_URL: str = Field(default="", description="Jira base URL e.g. https://yourcompany.atlassian.net")
+    JIRA_EMAIL: str = Field(default="", description="Jira account email")
+    JIRA_API_TOKEN: str = Field(default="", description="Jira API token from id.atlassian.com/manage-profile/security/api-tokens")
+    JIRA_PROJECT_KEY: str = Field(default="CS", description="Default Jira project key for incident tickets")
+    OPENCLAW_API_KEY: str = Field(default="", description="OpenClaw API key (optional — enables OpenClaw gateway)")
+    OPENCLAW_WEBHOOK_URL: str = Field(default="", description="Slack-compatible webhook URL for incident notifications")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -9,7 +9,7 @@ import {
   Shield, LayoutDashboard, AlertTriangle, Search, GitBranch,
   FileText, MessageSquare, Settings, ChevronLeft, ChevronRight,
   Menu, X, BarChart2, Zap, Wrench, Brain, ScrollText, Swords,
-  Target, FlaskConical, DollarSign, Network,
+  Target, FlaskConical, DollarSign, Network, Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -70,6 +70,12 @@ const navGroups: NavGroup[] = [
       { href: "/campaigns", label: "Campaign Detection", icon: Target },
       { href: "/digital-twin", label: "Digital Twin", icon: FlaskConical },
       { href: "/cost-intelligence", label: "Cost Intelligence", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Integrations",
+    items: [
+      { href: "/openclaw", label: "OpenClaw / Jira", icon: Ticket },
     ],
   },
   {

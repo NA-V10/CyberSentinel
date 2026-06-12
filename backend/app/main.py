@@ -351,6 +351,16 @@ def _register_routers(app: FastAPI) -> None:
     except ImportError:
         logger.warning("Cost Intelligence router not found — skipping")
 
+    # ------------------------------------------------------------------
+    # OpenClaw Integration — Jira + Notifications
+    # ------------------------------------------------------------------
+
+    try:
+        from backend.app.api.openclaw_integration import router as openclaw_router
+        app.include_router(openclaw_router, prefix=f"{prefix}/openclaw", tags=["OpenClaw"])
+    except ImportError:
+        logger.warning("OpenClaw integration router not found — skipping")
+
 
 # ---------------------------------------------------------------------------
 # Application instance (used by uvicorn and tests)

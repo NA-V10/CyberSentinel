@@ -14,6 +14,7 @@ const isProtectedRoute = createRouteMatcher([
   "/memory(.*)",
   "/audit-logs(.*)",
   "/onboarding(.*)",
+  "/openclaw(.*)",
 ]);
 
 const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
